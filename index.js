@@ -138,7 +138,7 @@ async function writeToSheet(report) {
 
     await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range: 'Sheet1!A:Q',
+      range: 'Form Responses 1!A:Q',
       valueInputOption: 'RAW',
       resource: { values: [row] },
     });
