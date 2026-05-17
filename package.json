@@ -1,0 +1,15 @@
+{
+  "name": "debriefplus",
+  "version": "1.0.0",
+  "description": "ESC fume event reporting via SMS",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "twilio": "^4.23.0",
+    "@anthropic-ai/sdk": "^0.20.0",
+    "googleapis": "^140.0.0"
+  }
+}
