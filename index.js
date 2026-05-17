@@ -171,7 +171,7 @@ app.post('/sms', async (req, res) => {
 
     try {
       const resp = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-5',
         max_tokens: 2000,
         system: REPORT_PROMPT,
         messages: [{ role: 'user', content: 'Transcript:\n\n' + transcript }],
@@ -223,7 +223,7 @@ app.post('/sms', async (req, res) => {
       : history;
 
     const resp = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-5',
       max_tokens: 300,
       system: SYSTEM_PROMPT,
       messages,
