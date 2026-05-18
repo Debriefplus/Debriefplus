@@ -136,10 +136,11 @@ async function writeToSheet(report) {
       report.additional_notes,
     ];
 
-    await sheets.spreadsheets.values.append({
+      await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range: 'Form Responses 1!A:Q',
+      range: 'Form Responses 1!A1',
       valueInputOption: 'RAW',
+      insertDataOption: 'INSERT_ROWS',
       resource: { values: [row] },
     });
 
