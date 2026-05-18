@@ -211,6 +211,20 @@ app.post('/sms', async (req, res) => {
   // First message — prepend the welcome if this is the opening
   const isFirst = history.length === 1;
 
+const messages = isFirst
+  ? [
+      {
+        role: 'user',
+        content: 'SYSTEM: First message from this crew member. Open with the confidentiality intro.',
+      },
+      {
+        role: 'assistant',
+        content: "Hey — a few things before we start. This conversation is completely confidential. No names, employee numbers, or identifying details are recorded or saved. This exists purely to help the ESC build data to better serve the pilot group. Thank you for taking the time to do this — it matters.",
+      },
+      { role: 'user', content: body },
+    ]
+  : history;
+
   try {
     const messages = isFirst
       ? [
