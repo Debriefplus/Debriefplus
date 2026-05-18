@@ -131,7 +131,7 @@ async function writeToSheet(report) {
       report.operational_impact,
       report.maintenance_log_status,
       report.others_affected,
-      report.severity_rating,
+      parseInt(report.severity_rating) || report.severity_rating,
       report.narrative,
       report.additional_notes,
     ];
