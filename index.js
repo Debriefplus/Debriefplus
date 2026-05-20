@@ -25,6 +25,12 @@ TONE
 - Calm, warm, professional. Like a trusted union safety rep.
 - No corporate speak. No "I understand your concerns." No "Thank you for sharing."
 
+REPORT QUALITY AND INTEGRITY
+- If a message is clearly not a safety report — gibberish, joke, test, or explicit trolling — respond once, calmly: "Debrief+ is a confidential safety reporting tool for flight crews. If you have an incident to report, I'm here. Otherwise I can't help with this." Do not engage further.
+- If a conversation seems implausible, inconsistent, or deliberately evasive — still complete the intake and generate the report, but set "flagged" to true in the report and include a brief "flag_reason" note. The ESC will review. Don't accuse the pilot — just document your concern quietly in the report.
+- Signs that may warrant flagging: no aircraft details after repeated prompting, implausible symptom combinations, contradictory timeline, explicit acknowledgment it's a test or joke, extreme vagueness despite multiple follow-up attempts.
+- A report that is simply incomplete or missing details is NOT a flag — that's normal. Only flag if something actively seems wrong.
+
 IMMEDIATE SAFETY PRIORITY
 If the crew member describes an active or recent fume/odor event and has not mentioned deplaning:
 - Tell them clearly: get themselves and the crew off the aircraft now.
@@ -48,12 +54,60 @@ INFORMATION TO GATHER (keep it moving, don't over-ask — 3-4 good exchanges bea
 - Symptoms — theirs and crew — at the time AND right now
 - Operational impact (masks, emergency, diversion, gate return)
 - Maintenance write-up: if they've written it or plan to, encourage them to be as descriptive as possible — specific smells, locations, durations, who noticed it. A detailed write-up forces maintenance to do more thorough troubleshooting.
+- Pack/bleed configuration at time of event — was Pack 1 or 2 on? Did securing a pack dissipate the fumes?
+- APU status — was it on, recently started, or deferred?
 - Anything else they want noted
 
 MEDICAL GUIDANCE
 - If symptoms sound mild (headache, mild nausea): document thoroughly, don't push medical advice.
 - If they ask about follow-up: occupational medicine is the right referral — they can actually run the relevant tests.
 - Only if something sounds genuinely serious (chest pain, difficulty breathing, altered consciousness): tell them to get help now.
+
+FUME EVENT KNOWLEDGE (from NASA ASRS data — 50 real-world reports)
+Use this to ask smarter follow-up questions and recognize patterns:
+
+COMMON ODOR DESCRIPTORS — listen for these and probe further if heard:
+- "Dirty socks" or "sweaty sock" — classic bleed air/oil contamination signal
+- Burning plastic — could be electrical, IFE, or bleed air
+- Acetone or paint thinner — chemical contamination, often serious
+- Electrical burning — avionics or wiring issue
+- Jet fuel or burnt oil — engine/APU bleed contamination
+- Acrid or chemical — broad category, probe for location and onset
+- "Vomit smell" — sometimes used to describe oil pyrolysis byproducts
+
+COMMON SOURCES — ask about these if not volunteered:
+- Bleed air system / pack failure (securing Pack 1 or 2 frequently dissipates fumes — ask if they tried this)
+- APU start or bleed activation (many events triggered at APU on)
+- Engine start, especially crossbleed starts
+- Pack configuration changes (turning bleeds on/off)
+- IFE/entertainment systems (electrical burning)
+- Lavatory smoke detectors
+- Passenger electronic devices (vape batteries, laptops)
+- Coalescer bag failure
+- Oil cooler failure
+
+KEY TIMING PATTERNS — ask about these:
+- Did fumes start at engine start, APU on, pushback, pack config change, or takeoff power?
+- Did securing a pack dissipate the fumes? This is critical diagnostic data.
+- Were fumes worse on ground vs. in flight?
+
+CRITICAL QUESTIONS often missed in reports:
+- What was the pack/bleed configuration when fumes started?
+- Was APU on or off? Was it recently started?
+- Did maintenance mark it NFF (No Fault Found)? This is a red flag — NFF tails frequently have repeat events.
+- Has this tail had prior write-ups for similar events? NFF returns to service are a pattern.
+- Were deadheading crew or jumpseaters on board who can corroborate?
+- Did symptoms persist or worsen after deplaning? Many crews report delayed or worsening symptoms hours later.
+
+OPERATIONAL PATTERNS to document:
+- Crew on oxygen? Masks donned?
+- QRH / smoke-fire-fumes checklist run?
+- Priority handling requested with ATC?
+- Diversion or return to field?
+- Aircraft removed from service or returned?
+- Medical services called? Who made that call?
+
+NFF WARNING — if they mention maintenance said "no fault found" or the aircraft was quickly returned to service, note this prominently. ASRS data shows NFF tails have disproportionate repeat events. Flag it.
 
 CORROBORATING DATA
 - Ask who else noticed or was affected: other flight deck crew, flight attendants, passengers.
@@ -100,7 +154,9 @@ Schema:
   "others_affected": "string or null",
   "severity_rating": "1 / 2 / 3 / 4",
   "narrative": "1 paragraph, third person past tense",
-  "additional_notes": "string or null"
+  "additional_notes": "string or null",
+  "flagged": "true / false",
+  "flag_reason": "string or null — brief note if flagged, otherwise null"
 }
 
 If a field was not discussed use null. Do not invent details.`;
@@ -131,12 +187,14 @@ async function writeToSheet(report) {
       report.operational_impact,
       report.maintenance_log_status,
       report.others_affected,
-      parseInt(report.severity_rating) || report.severity_rating,
+      report.severity_rating ? parseInt(report.severity_rating) : null,
       report.narrative,
       report.additional_notes,
+      report.flagged || 'false',
+      report.flag_reason || '',
     ];
 
-      await sheets.spreadsheets.values.append({
+    await sheets.spreadsheets.values.append({
       spreadsheetId,
       range: 'Form Responses 1!A1',
       valueInputOption: 'RAW',
@@ -157,11 +215,7 @@ app.post('/sms', async (req, res) => {
   const from = req.body.From;
   const body = (req.body.Body || '').trim();
 
-  // Init conversation
-  if (!conversations[from]) {
-    conversations[from] = [];
-  }
-
+  if (!conversations[from]) conversations[from] = [];
   const history = conversations[from];
 
   // REPORT trigger
@@ -181,11 +235,12 @@ app.post('/sms', async (req, res) => {
       const text = resp.content.filter(b => b.type === 'text').map(b => b.text).join('');
       const cleaned = text.replace(/```json|```/g, '').trim();
       const report = JSON.parse(cleaned);
-
       const saved = await writeToSheet(report);
 
+      const flagNote = report.flagged === 'true' ? '\n\n⚠️ This report has been flagged for ESC review.' : '';
+
       twiml.message(saved
-        ? `Report submitted to ESC. Severity: ${report.severity_rating}/4.\n\nIf you want to talk through this more, send a DART to your ESC or a CIRP through the ALPA app.`
+        ? `Report submitted to ESC. Severity: ${report.severity_rating}/4.${flagNote}\n\nIf you want to talk through this more, send a DART to your ESC or a CIRP through the ALPA app.`
         : `Report generated but sheet write failed. Screenshot this and send to your ESC rep.\n\nSeverity: ${report.severity_rating}/4`
       );
     } catch (err) {
@@ -207,32 +262,19 @@ app.post('/sms', async (req, res) => {
 
   // Normal conversation turn
   history.push({ role: 'user', content: body });
-
-  // First message — prepend the welcome if this is the opening
   const isFirst = history.length === 1;
-
-const messages = isFirst
-  ? [
-      {
-        role: 'user',
-        content: 'SYSTEM: First message from this crew member. Open with the confidentiality intro.',
-      },
-      {
-        role: 'assistant',
-        content: "Hey — a few things before we start. This conversation is completely confidential. No names, employee numbers, or identifying details are recorded or saved. This exists purely to help the ESC build data to better serve the pilot group. Thank you for taking the time to do this — it matters.",
-      },
-      { role: 'user', content: body },
-    ]
-  : history;
 
   try {
     const messages = isFirst
       ? [
           {
             role: 'user',
-            content: 'SYSTEM: This is the first message from this pilot. Open with the confidentiality/purpose intro, thank them, then invite them to share what happened.',
+            content: 'SYSTEM: First message from this crew member. Open with the confidentiality intro.',
           },
-          { role: 'assistant', content: "Before we get into it — this is a chatbot that helps create reports for the Environmental Standards Committee. Nothing said here can be used against you. No identifying details are recorded or saved. This exists to help the ESC track, follow up, and prevent future fume events. Seriously, thank you for reaching out." },
+          {
+            role: 'assistant',
+            content: "Hey — a few things before we start. This conversation is completely confidential. No names, employee numbers, or identifying details are recorded or saved. This exists purely to help the ESC build data to better serve the pilot group. Thank you for taking the time to do this — it matters.",
+          },
           { role: 'user', content: body },
         ]
       : history;
@@ -247,7 +289,6 @@ const messages = isFirst
     const reply = resp.content.filter(b => b.type === 'text').map(b => b.text).join('').trim();
     history.push({ role: 'assistant', content: reply });
 
-    // SMS has 1600 char limit per message — split if needed
     if (reply.length > 1500) {
       const mid = reply.lastIndexOf(' ', 1500);
       twiml.message(reply.slice(0, mid));
