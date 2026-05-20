@@ -64,17 +64,26 @@ If maintenance asks the pilot to perform an engine run to troubleshoot the fume 
 - If they do it: tell them once, clearly: "If you do the run, mask on or ready before you start."
 - Document whether a run was requested, by whom, and whether the pilot performed it.
 
-INFORMATION TO GATHER (keep it moving, don't over-ask — 3-4 good exchanges beats 10 mediocre ones)
-- Aircraft type and tail number
-- Route (departure and arrival)
-- Phase of flight
-- Odor/smoke: what it smelled like, where noticed, visible haze or smoke
-- Symptoms — theirs and crew — at the time AND right now
-- Operational impact (masks, emergency, diversion, gate return)
-- Maintenance write-up: if they've written it or plan to, encourage them to be as descriptive as possible — specific smells, locations, durations, who noticed it. A detailed write-up forces maintenance to do more thorough troubleshooting.
-- Pack/bleed configuration at time of event — was Pack 1 or 2 on? Did securing a pack dissipate the fumes?
-- APU status — was it on, recently started, or deferred?
-- Anything else they want noted
+AIRBUS A320 TSM REQUIRED FIELDS
+After the initial narrative and symptoms are captured, tell the pilot: "I have a few quick configuration questions — maintenance needs these to run the fault isolation procedure."
+
+Then work through these efficiently — group related questions together where possible (e.g. ask Pack 1 and Pack 2 in the same message):
+
+- Start method: APU Bleed or Air Starter Unit?
+- Was ground air or A/C packs used at the gate?
+- Any engine power level changes during or just before the event? (e.g. top of descent)
+- APU Bleed: On or Off at time of event?
+- Isolation/Cross Bleed Valve: Open or Closed?
+- Pack 1: On or Off?
+- Pack 2: On or Off?
+- Bleed 1: On or Off?
+- Bleed 2: On or Off?
+- Affected area: Cockpit, Cabin, or Both?
+- Specific area within the aircraft if known?
+- Was the aircraft deiced prior to the event?
+- Level of odor: A (Temporary), B (Persistent), or C (Continuous and Discomfortable)?
+
+Group them smartly — Packs and Bleeds together, Start Method and Ground Air together. Aim to cover all fields in 3-4 messages max. If they don't know an answer, accept "unknown" and move on. Do NOT generate the report until these fields are captured or explicitly marked unknown.
 
 MEDICAL GUIDANCE
 - If symptoms sound mild (headache, mild nausea): document thoroughly, don't push medical advice.
@@ -170,6 +179,19 @@ Schema:
   "operational_impact": "string or null",
   "maintenance_log_status": "string or null",
   "others_affected": "string or null",
+  "start_method": "APU Bleed / Air Starter Unit / unknown",
+  "ground_air_or_packs_at_gate": "Ground Air / A/C Packs / Neither / unknown",
+  "engine_pwr_level_changes": "yes / no / unknown",
+  "apu_bleed": "on / off / unknown",
+  "cross_bleed_valve": "open / closed / unknown",
+  "pack_1": "on / off / unknown",
+  "pack_2": "on / off / unknown",
+  "bleed_1": "on / off / unknown",
+  "bleed_2": "on / off / unknown",
+  "affected_area": "cockpit / cabin / both / unknown",
+  "specific_area": "string or null",
+  "aircraft_deiced": "yes / no / unknown",
+  "odor_level": "A / B / C / unknown",
   "severity_rating": "1 / 2 / 3 / 4",
   "narrative": "1 paragraph, third person past tense",
   "additional_notes": "string or null",
@@ -206,7 +228,19 @@ async function writeToSheet(report) {
       report.maintenance_log_status,
       report.others_affected,
       report.severity_rating ? parseInt(report.severity_rating) : null,
-      report.narrative,
+      report.start_method,
+      report.ground_air_or_packs_at_gate,
+      report.engine_pwr_level_changes,
+      report.apu_bleed,
+      report.cross_bleed_valve,
+      report.pack_1,
+      report.pack_2,
+      report.bleed_1,
+      report.bleed_2,
+      report.affected_area,
+      report.specific_area,
+      report.aircraft_deiced,
+      report.odor_level,
       report.additional_notes,
       report.flagged || 'false',
       report.flag_reason || '',
