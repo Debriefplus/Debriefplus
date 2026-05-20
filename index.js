@@ -168,6 +168,7 @@ Schema:
 {
   "event_summary": "2-3 sentence summary",
   "aircraft_type": "string or null",
+  "event_time_zulu": "string or null — time of event in Zulu/UTC format e.g. 1430Z",
   "tail_number": "string or null",
   "departure": "string or null",
   "arrival": "string or null",
@@ -213,7 +214,7 @@ async function writeToSheet(report) {
     const spreadsheetId = process.env.GOOGLE_SHEET_ID;
 
     const row = [
-      new Date().toISOString(),
+      new Date().toISOString() + 'Z',
       report.event_summary,
       report.aircraft_type,
       report.tail_number,
