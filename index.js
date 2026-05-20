@@ -264,20 +264,16 @@ app.post('/sms', async (req, res) => {
   history.push({ role: 'user', content: body });
   const isFirst = history.length === 1;
 
+  if (isFirst) {
+    const welcomeReply = "Hey — a few things before we start. This conversation is completely confidential. No names, employee numbers, or identifying details are recorded or saved. This exists purely to help the ESC build data to better serve the pilot group. Thank you for taking the time — it matters. When you're ready, tell me what happened in your own words.";
+    history.push({ role: 'assistant', content: welcomeReply });
+    twiml.message(welcomeReply);
+    res.type('text/xml').send(twiml.toString());
+    return;
+  }
+
   try {
-    const messages = isFirst
-      ? [
-          {
-            role: 'user',
-            content: 'SYSTEM: First message from this crew member. Open with the confidentiality intro.',
-          },
-          {
-            role: 'assistant',
-            content: "Hey — a few things before we start. This conversation is completely confidential. No names, employee numbers, or identifying details are recorded or saved. This exists purely to help the ESC build data to better serve the pilot group. Thank you for taking the time to do this — it matters.",
-          },
-          { role: 'user', content: body },
-        ]
-      : history;
+    const messages = history;
 
     const resp = await anthropic.messages.create({
       model: 'claude-sonnet-4-5',
