@@ -64,26 +64,16 @@ If maintenance asks the pilot to perform an engine run to troubleshoot the fume 
 - If they do it: tell them once, clearly: "If you do the run, mask on or ready before you start."
 - Document whether a run was requested, by whom, and whether the pilot performed it.
 
-AIRBUS A320 TSM REQUIRED FIELDS
-After the initial narrative and symptoms are captured, tell the pilot: "I have a few quick configuration questions — maintenance needs these to run the fault isolation procedure."
-
-Then work through these efficiently — group related questions together where possible (e.g. ask Pack 1 and Pack 2 in the same message):
-
-- Start method: APU Bleed or Air Starter Unit?
-- Was ground air or A/C packs used at the gate?
-- Any engine power level changes during or just before the event? (e.g. top of descent)
-- APU Bleed: On or Off at time of event?
-- Isolation/Cross Bleed Valve: Open or Closed?
-- Pack 1: On or Off?
-- Pack 2: On or Off?
-- Bleed 1: On or Off?
-- Bleed 2: On or Off?
-- Affected area: Cockpit, Cabin, or Both?
-- Specific area within the aircraft if known?
-- Was the aircraft deiced prior to the event?
-- Level of odor: A (Temporary), B (Persistent), or C (Continuous and Discomfortable)?
-
-Group them smartly — Packs and Bleeds together, Start Method and Ground Air together. Aim to cover all fields in 3-4 messages max. If they don't know an answer, accept "unknown" and move on. Do NOT generate the report until these fields are captured or explicitly marked unknown.
+INFORMATION TO GATHER (keep it moving, don't over-ask — 3-4 good exchanges beats 10 mediocre ones)
+- Tail number
+- Route (departure and arrival)
+- Phase of flight
+- Odor/smoke: what it smelled like, where noticed, visible haze or smoke
+- Symptoms — theirs and crew — at the time AND right now
+- Operational impact (masks, emergency, diversion, gate return)
+- Time of event — ask for local time and the timezone or airport they were at. Convert to Zulu (UTC) before recording. Show the pilot the converted time so they can confirm.
+- Maintenance write-up: if they've written it or plan to, encourage them to be as descriptive as possible — specific smells, locations, durations, who noticed it. A detailed write-up forces maintenance to do more thorough troubleshooting.
+- Anything else they want noted
 
 MEDICAL GUIDANCE
 - If symptoms sound mild (headache, mild nausea): document thoroughly, don't push medical advice.
@@ -136,6 +126,25 @@ OPERATIONAL PATTERNS to document:
 
 NFF WARNING — if they mention maintenance said "no fault found" or the aircraft was quickly returned to service, note this prominently. ASRS data shows NFF tails have disproportionate repeat events. Flag it.
 
+AIRBUS A320 TSM REQUIRED FIELDS
+After the initial narrative and symptoms are captured, tell the pilot: "I have a few quick configuration questions — maintenance needs these to run the fault isolation procedure."
+
+Then work through these efficiently — group related questions together where possible:
+
+- Start method: APU Bleed or Air Starter Unit?
+- Was ground air or A/C packs used at the gate?
+- Any engine power level changes during or just before the event? (e.g. top of descent)
+- APU Bleed: On or Off at time of event?
+- Isolation/Cross Bleed Valve: Open or Closed?
+- Pack 1 and Pack 2: On or Off? (ask together)
+- Bleed 1 and Bleed 2: On or Off? (ask together)
+- Affected area: Cockpit, Cabin, or Both?
+- Specific area within the aircraft if known?
+- Was the aircraft deiced prior to the event?
+- Level of odor: A (Temporary), B (Persistent), or C (Continuous and Discomfortable)?
+
+Group them smartly — Packs and Bleeds together, Start Method and Ground Air together. Aim to cover all fields in 3-4 messages max. If they don't know an answer, accept "unknown" and move on. Do NOT generate the report until these fields are captured or explicitly marked unknown.
+
 CORROBORATING DATA
 - Ask who else noticed or was affected: other flight deck crew, flight attendants, passengers.
 - Ask whether maintenance was notified and whether a write-up was logged in the AML.
@@ -151,7 +160,7 @@ NEVER
 - Never sound like a form.
 - Never use bullets, numbered lists, or long paragraphs — this is SMS.
 - Never minimize what they're describing.
-- Never send urgent care. Occupational medicine for non-emergency follow-up only.`;
+- Never suggest urgent care. Occupational medicine for non-emergency follow-up only.`;
 
 // ── REPORT PROMPT ─────────────────────────────────────────────────────────────
 const REPORT_PROMPT = `You are generating a structured ESC fume/odor event report from an SMS intake conversation.
@@ -164,10 +173,13 @@ Severity 1-4 (AQP-style, weight toward middle):
 3 - Confirmed fume event: clear odor, moderate symptoms, possible operational impact. Most real events.
 4 - Serious fume event: neurological symptoms, emergency declared, diversion, multiple crew/pax affected.
 
+Odor level (Airbus standard):
+A - Temporary
+B - Persistent
+C - Continuous and Discomfortable
+
 Schema:
 {
-  "event_summary": "2-3 sentence summary",
-  "aircraft_type": "string or null",
   "event_time_zulu": "string or null — time of event in Zulu/UTC format e.g. 1430Z",
   "tail_number": "string or null",
   "departure": "string or null",
@@ -180,6 +192,7 @@ Schema:
   "operational_impact": "string or null",
   "maintenance_log_status": "string or null",
   "others_affected": "string or null",
+  "severity_rating": "1 / 2 / 3 / 4",
   "start_method": "APU Bleed / Air Starter Unit / unknown",
   "ground_air_or_packs_at_gate": "Ground Air / A/C Packs / Neither / unknown",
   "engine_pwr_level_changes": "yes / no / unknown",
@@ -193,11 +206,10 @@ Schema:
   "specific_area": "string or null",
   "aircraft_deiced": "yes / no / unknown",
   "odor_level": "A / B / C / unknown",
-  "severity_rating": "1 / 2 / 3 / 4",
   "narrative": "1 paragraph, third person past tense",
   "additional_notes": "string or null",
   "flagged": "true / false",
-  "flag_reason": "string or null — brief note if flagged, otherwise null"
+  "flag_reason": "string or null"
 }
 
 If a field was not discussed use null. Do not invent details.`;
@@ -214,9 +226,8 @@ async function writeToSheet(report) {
     const spreadsheetId = process.env.GOOGLE_SHEET_ID;
 
     const row = [
-      new Date().toISOString() + 'Z',
-      report.event_summary,
-      report.aircraft_type,
+      new Date().toISOString(),
+      report.event_time_zulu,
       report.tail_number,
       report.departure,
       report.arrival,
@@ -242,6 +253,7 @@ async function writeToSheet(report) {
       report.specific_area,
       report.aircraft_deiced,
       report.odor_level,
+      report.narrative,
       report.additional_notes,
       report.flagged || 'false',
       report.flag_reason || '',
@@ -271,20 +283,17 @@ app.post('/sms', async (req, res) => {
 
   // REPORT trigger
   if (body.toUpperCase() === 'REPORT') {
-    // Minimum info check — need at least 4 exchanges before generating
     const userMessages = history.filter(m => m.role === 'user');
     if (userMessages.length < 3) {
-      twiml.message("I want to make sure I have enough to build a solid report. Can you tell me a bit more — aircraft type, tail number, and what the odor was like?");
+      twiml.message("I want to make sure I have enough to build a solid report. Can you tell me a bit more — tail number, route, and what the odor was like?");
       res.type('text/xml').send(twiml.toString());
       return;
     }
 
-    // Check transcript for minimum required fields via Claude
     const transcript = history
       .map(m => `${m.role === 'user' ? 'CREW' : 'INTAKE'}: ${m.content}`)
       .join('\n\n');
 
-    // Quick pre-check — ask Claude if we have enough to generate
     const checkResp = await anthropic.messages.create({
       model: 'claude-sonnet-4-5',
       max_tokens: 200,
@@ -315,7 +324,6 @@ app.post('/sms', async (req, res) => {
       const report = JSON.parse(cleaned);
       const saved = await writeToSheet(report);
 
-      // Auto-clear conversation after successful report
       if (saved) conversations[from] = { messages: [], lastActivity: Date.now() };
 
       const flagNote = report.flagged === 'true' ? '\n\n⚠️ This report has been flagged for ESC review.' : '';
@@ -345,20 +353,26 @@ app.post('/sms', async (req, res) => {
   history.push({ role: 'user', content: body });
   const isFirst = history.length === 1;
 
+  if (isFirst) {
+    const welcomeReply = "Hey — a few things before we start. This conversation is completely confidential. No names, employee numbers, or identifying details are recorded or saved. This exists purely to help the ESC build data to better serve the pilot group. Thank you for taking the time — it matters. When you're ready, tell me what happened in your own words.";
+    history.push({ role: 'assistant', content: welcomeReply });
+    twiml.message(welcomeReply);
+    res.type('text/xml').send(twiml.toString());
+    return;
+  }
+
+  // Also fire welcome if no assistant response yet
+  const hasAssistantResponse = history.some(m => m.role === 'assistant');
+  if (!hasAssistantResponse) {
+    const welcomeReply = "Hey — a few things before we start. This conversation is completely confidential. No names, employee numbers, or identifying details are recorded or saved. This exists purely to help the ESC build data to better serve the pilot group. Thank you for taking the time — it matters. When you're ready, tell me what happened in your own words.";
+    history.push({ role: 'assistant', content: welcomeReply });
+    twiml.message(welcomeReply);
+    res.type('text/xml').send(twiml.toString());
+    return;
+  }
+
   try {
-    const messages = isFirst
-      ? [
-          {
-            role: 'user',
-            content: 'SYSTEM: First message from this crew member. Open with the confidentiality intro.',
-          },
-          {
-            role: 'assistant',
-            content: "Hey — a few things before we start. This conversation is completely confidential. No names, employee numbers, or identifying details are recorded or saved. This exists purely to help the ESC build data to better serve the pilot group. Thank you for taking the time to do this — it matters.",
-          },
-          { role: 'user', content: body },
-        ]
-      : history;
+    const messages = history;
 
     const resp = await anthropic.messages.create({
       model: 'claude-sonnet-4-5',
