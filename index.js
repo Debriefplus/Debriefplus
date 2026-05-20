@@ -10,7 +10,25 @@ app.use(express.json());
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 // In-memory conversation store keyed by phone number
+// Each entry: { messages: [], lastActivity: timestamp }
 const conversations = {};
+
+function getConversation(from) {
+  const now = Date.now();
+  const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+
+  if (!conversations[from]) {
+    conversations[from] = { messages: [], lastActivity: now };
+  }
+
+  // Auto-reset if inactive for 24+ hours
+  if (now - conversations[from].lastActivity > TWENTY_FOUR_HOURS) {
+    conversations[from] = { messages: [], lastActivity: now };
+  }
+
+  conversations[from].lastActivity = now;
+  return conversations[from].messages;
+}
 
 // ── SYSTEM PROMPT ─────────────────────────────────────────────────────────────
 const SYSTEM_PROMPT = `You are Debrief+, a calm, operationally-aware AI assistant helping a commercial airline pilot or flight crew member document a fume or odor event via SMS. This intake feeds the union's Environmental Safety Committee (ESC). It is voluntary, non-punitive, and no identifying details are recorded or saved.
@@ -214,15 +232,40 @@ app.post('/sms', async (req, res) => {
   const twiml = new twilio.twiml.MessagingResponse();
   const from = req.body.From;
   const body = (req.body.Body || '').trim();
-
-  if (!conversations[from]) conversations[from] = [];
-  const history = conversations[from];
+  const history = getConversation(from);
 
   // REPORT trigger
   if (body.toUpperCase() === 'REPORT') {
+    // Minimum info check — need at least 4 exchanges before generating
+    const userMessages = history.filter(m => m.role === 'user');
+    if (userMessages.length < 3) {
+      twiml.message("I want to make sure I have enough to build a solid report. Can you tell me a bit more — aircraft type, tail number, and what the odor was like?");
+      res.type('text/xml').send(twiml.toString());
+      return;
+    }
+
+    // Check transcript for minimum required fields via Claude
     const transcript = history
       .map(m => `${m.role === 'user' ? 'CREW' : 'INTAKE'}: ${m.content}`)
       .join('\n\n');
+
+    // Quick pre-check — ask Claude if we have enough to generate
+    const checkResp = await anthropic.messages.create({
+      model: 'claude-sonnet-4-5',
+      max_tokens: 200,
+      messages: [{
+        role: 'user',
+        content: `Review this intake transcript and reply with ONLY "ready" if it contains at minimum: some odor/event description AND either a tail number or route. Otherwise reply with a single short SMS-style question asking for the single most important missing piece of information.\n\nTranscript:\n${transcript}`
+      }]
+    });
+
+    const checkResult = checkResp.content.filter(b => b.type === 'text').map(b => b.text).join('').trim().toLowerCase();
+
+    if (!checkResult.startsWith('ready')) {
+      twiml.message(checkResult);
+      res.type('text/xml').send(twiml.toString());
+      return;
+    }
 
     try {
       const resp = await anthropic.messages.create({
@@ -236,6 +279,9 @@ app.post('/sms', async (req, res) => {
       const cleaned = text.replace(/```json|```/g, '').trim();
       const report = JSON.parse(cleaned);
       const saved = await writeToSheet(report);
+
+      // Auto-clear conversation after successful report
+      if (saved) conversations[from] = { messages: [], lastActivity: Date.now() };
 
       const flagNote = report.flagged === 'true' ? '\n\n⚠️ This report has been flagged for ESC review.' : '';
 
@@ -254,8 +300,8 @@ app.post('/sms', async (req, res) => {
 
   // RESET trigger
   if (body.toUpperCase() === 'RESET') {
-    conversations[from] = [];
-    twiml.message("Conversation reset. When you're ready, just tell me what happened.");
+    conversations[from] = { messages: [], lastActivity: Date.now() };
+    twiml.message("Hey — a few things before we start. This conversation is completely confidential. No names, employee numbers, or identifying details are recorded or saved. This exists purely to help the ESC build data to better serve the pilot group. Thank you for taking the time — it matters. When you're ready, tell me what happened in your own words.");
     res.type('text/xml').send(twiml.toString());
     return;
   }
@@ -264,16 +310,20 @@ app.post('/sms', async (req, res) => {
   history.push({ role: 'user', content: body });
   const isFirst = history.length === 1;
 
-  if (isFirst) {
-    const welcomeReply = "Hey — a few things before we start. This conversation is completely confidential. No names, employee numbers, or identifying details are recorded or saved. This exists purely to help the ESC build data to better serve the pilot group. Thank you for taking the time — it matters. When you're ready, tell me what happened in your own words.";
-    history.push({ role: 'assistant', content: welcomeReply });
-    twiml.message(welcomeReply);
-    res.type('text/xml').send(twiml.toString());
-    return;
-  }
-
   try {
-    const messages = history;
+    const messages = isFirst
+      ? [
+          {
+            role: 'user',
+            content: 'SYSTEM: First message from this crew member. Open with the confidentiality intro.',
+          },
+          {
+            role: 'assistant',
+            content: "Hey — a few things before we start. This conversation is completely confidential. No names, employee numbers, or identifying details are recorded or saved. This exists purely to help the ESC build data to better serve the pilot group. Thank you for taking the time to do this — it matters.",
+          },
+          { role: 'user', content: body },
+        ]
+      : history;
 
     const resp = await anthropic.messages.create({
       model: 'claude-sonnet-4-5',
