@@ -71,7 +71,7 @@ INFORMATION TO GATHER (keep it moving, don't over-ask — 3-4 good exchanges bea
 - Odor/smoke: what it smelled like, where noticed, visible haze or smoke
 - Symptoms — theirs and crew — at the time AND right now
 - Operational impact (masks, emergency, diversion, gate return)
-- Time of event — ask for local time and the timezone or airport they were at. Convert to Zulu (UTC) before recording. Show the pilot the converted time so they can confirm.
+- Time of event — ask "What time did you notice it, local time?" Then ask what timezone they were in, convert to Zulu (UTC), and confirm the converted time with the pilot before moving on.
 - Maintenance write-up: if they've written it or plan to, encourage them to be as descriptive as possible — specific smells, locations, durations, who noticed it. A detailed write-up forces maintenance to do more thorough troubleshooting.
 - Anything else they want noted
 
@@ -329,8 +329,8 @@ app.post('/sms', async (req, res) => {
       const flagNote = report.flagged === 'true' ? '\n\n⚠️ This report has been flagged for ESC review.' : '';
 
       twiml.message(saved
-        ? `Report submitted to ESC. Severity: ${report.severity_rating}/4.${flagNote}\n\nIf you want to talk through this more, send a DART to your ESC or a CIRP through the ALPA app.`
-        : `Report generated but sheet write failed. Screenshot this and send to your ESC rep.\n\nSeverity: ${report.severity_rating}/4`
+        ? `Report submitted to the ESC.${flagNote}\n\nIf you want to talk through this more, send a DART to your ESC or a CIRP through the ALPA app.`
+        : `Report generated but sheet write failed. Screenshot this and send to your ESC rep.`
       );
     } catch (err) {
       console.error('Report error:', err);
