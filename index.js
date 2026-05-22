@@ -291,7 +291,40 @@ app.post('/sms', async (req, res) => {
   const body = (req.body.Body || '').trim();
   const history = getConversation(from);
 
-  // REPORT trigger
+  // FOLLOWUP trigger — always works regardless of conversation state
+  const bodyUpper = body.toUpperCase();
+  if (bodyUpper === 'FOLLOWUP' || bodyUpper === 'FOLLOW UP' || bodyUpper === 'FOLLOW-UP') {
+    twiml.message(RESOURCES.menu);
+    res.type('text/xml').send(twiml.toString());
+    return;
+  }
+
+  // Resource menu responses — always work regardless of conversation state
+  if (body === '1') {
+    twiml.message(RESOURCES.reports);
+    res.type('text/xml').send(twiml.toString());
+    return;
+  }
+  if (body === '2') {
+    twiml.message(RESOURCES.medical_1);
+    twiml.message(RESOURCES.medical_2);
+    res.type('text/xml').send(twiml.toString());
+    return;
+  }
+  if (body === '3') {
+    twiml.message(RESOURCES.alpa);
+    res.type('text/xml').send(twiml.toString());
+    return;
+  }
+  if (body === '4') {
+    twiml.message(RESOURCES.reports);
+    twiml.message(RESOURCES.medical_1);
+    twiml.message(RESOURCES.medical_2);
+    twiml.message(RESOURCES.alpa);
+    res.type('text/xml').send(twiml.toString());
+    return;
+  }
+
   if (body.toUpperCase() === 'REPORT') {
     const userMessages = history.filter(m => m.role === 'user');
     if (userMessages.length < 3) {
@@ -304,24 +337,24 @@ app.post('/sms', async (req, res) => {
       .map(m => `${m.role === 'user' ? 'CREW' : 'INTAKE'}: ${m.content}`)
       .join('\n\n');
 
-    const checkResp = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5',
-      max_tokens: 200,
-      messages: [{
-        role: 'user',
-        content: `Review this intake transcript and reply with ONLY "ready" if it contains at minimum: some odor/event description AND either a tail number or route. Otherwise reply with a single short SMS-style question asking for the single most important missing piece of information.\n\nTranscript:\n${transcript}`
-      }]
-    });
-
-    const checkResult = checkResp.content.filter(b => b.type === 'text').map(b => b.text).join('').trim().toLowerCase();
-
-    if (!checkResult.startsWith('ready')) {
-      twiml.message(checkResult);
-      res.type('text/xml').send(twiml.toString());
-      return;
-    }
-
     try {
+      const checkResp = await anthropic.messages.create({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 200,
+        messages: [{
+          role: 'user',
+          content: `Review this intake transcript and reply with ONLY "ready" if it contains at minimum: some odor/event description AND either a tail number or route. Otherwise reply with a single short SMS-style question asking for the single most important missing piece of information.\n\nTranscript:\n${transcript}`
+        }]
+      });
+
+      const checkResult = checkResp.content.filter(b => b.type === 'text').map(b => b.text).join('').trim().toLowerCase();
+
+      if (!checkResult.startsWith('ready')) {
+        twiml.message(checkResult);
+        res.type('text/xml').send(twiml.toString());
+        return;
+      }
+
       const resp = await anthropic.messages.create({
         model: 'claude-sonnet-4-5',
         max_tokens: 2000,
@@ -347,6 +380,11 @@ app.post('/sms', async (req, res) => {
       twiml.message("Something went wrong generating the report. Reply REPORT to try again.");
     }
 
+    // Guaranteed response — if twiml has no messages yet something went very wrong
+    if (!twiml.toString().includes('<Message>')) {
+      twiml.message("Report received. Something went wrong on our end — please reply REPORT to try again or text FOLLOWUP for resources.");
+    }
+
     res.type('text/xml').send(twiml.toString());
     return;
   }
@@ -354,43 +392,7 @@ app.post('/sms', async (req, res) => {
   // RESET trigger
   if (body.toUpperCase() === 'RESET') {
     conversations[from] = { messages: [], lastActivity: Date.now() };
-    twiml.message("Hey — a few things before we start. This conversation is completely confidential. No names, employee numbers, or identifying details are recorded or saved. This exists purely to help the ESC build data to better serve the pilot group. Thank you for taking the time — it matters. When you're ready, tell me what happened in your own words.");
-    res.type('text/xml').send(twiml.toString());
-    return;
-  }
-
-  // FOLLOWUP trigger
-  if (body.toUpperCase() === 'FOLLOWUP') {
-    twiml.message(RESOURCES.menu);
-    res.type('text/xml').send(twiml.toString());
-    return;
-  }
-
-  // Resource menu responses
-  if (body === '1') {
-    twiml.message(RESOURCES.reports);
-    res.type('text/xml').send(twiml.toString());
-    return;
-  }
-
-  if (body === '2') {
-    twiml.message(RESOURCES.medical_1);
-    twiml.message(RESOURCES.medical_2);
-    res.type('text/xml').send(twiml.toString());
-    return;
-  }
-
-  if (body === '3') {
-    twiml.message(RESOURCES.alpa);
-    res.type('text/xml').send(twiml.toString());
-    return;
-  }
-
-  if (body === '4') {
-    twiml.message(RESOURCES.reports);
-    twiml.message(RESOURCES.medical_1);
-    twiml.message(RESOURCES.medical_2);
-    twiml.message(RESOURCES.alpa);
+    twiml.message("Hey — a few things before we start. This conversation is completely confidential. No names, employee numbers, or identifying details are recorded or saved. This exists to help the ESC build data to serve the pilot group — and to be a resource for you moving forward. Thank you for taking the time — it matters. When you're ready, tell me what happened in your own words.");
     res.type('text/xml').send(twiml.toString());
     return;
   }
