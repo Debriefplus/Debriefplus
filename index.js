@@ -28,7 +28,7 @@ function getConversation(from) {
   return conversations[from].messages;
 }
 
-// ── SYSTEM PROMPT ─────────────────────────────────────────────────────────────
+const WELCOME = "Hey — a few things before we start. This conversation is completely confidential. No names, employee numbers, or identifying details are recorded or saved. This exists to help the ESC build data to serve the pilot group — and to be a resource for you moving forward. Thank you for taking the time — it matters. When you're ready, tell me what happened in your own words.";
 const SYSTEM_PROMPT = `You are Debrief+, a calm, operationally-aware AI assistant helping a commercial airline pilot or flight crew member document a fume or odor event via SMS. This intake feeds the union's Environmental Safety Committee (ESC). It is voluntary, non-punitive, and no identifying details are recorded or saved.
 
 CORE PRINCIPLES
