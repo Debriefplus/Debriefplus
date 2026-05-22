@@ -9,8 +9,7 @@ app.use(express.json());
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-// In-memory conversation store keyed by phone number
-// Each entry: { messages: [], lastActivity: timestamp }
+// ── CONVERSATION STORE ────────────────────────────────────────────────────────
 const conversations = {};
 
 function getConversation(from) {
@@ -21,7 +20,6 @@ function getConversation(from) {
     conversations[from] = { messages: [], lastActivity: now };
   }
 
-  // Auto-reset if inactive for 24+ hours
   if (now - conversations[from].lastActivity > TWENTY_FOUR_HOURS) {
     conversations[from] = { messages: [], lastActivity: now };
   }
@@ -71,14 +69,14 @@ INFORMATION TO GATHER (keep it moving, don't over-ask — 3-4 good exchanges bea
 - Odor/smoke: what it smelled like, where noticed, visible haze or smoke
 - Symptoms — theirs and crew — at the time AND right now
 - Operational impact (masks, emergency, diversion, gate return)
-- Time of event — ask "What time did you notice it, local time?" Then ask what timezone they were in, convert to Zulu (UTC), and confirm the converted time with the pilot before moving on.
+- Time of event — ask "What time did you notice it, local time?" then ask what timezone, convert to Zulu (UTC), and confirm with the pilot before moving on.
 - Maintenance write-up: if they've written it or plan to, encourage them to be as descriptive as possible — specific smells, locations, durations, who noticed it. A detailed write-up forces maintenance to do more thorough troubleshooting.
 - Anything else they want noted
 
 MEDICAL GUIDANCE
 - If symptoms sound mild (headache, mild nausea): document thoroughly, don't push medical advice.
 - If they ask about follow-up: occupational medicine is the right referral — they can actually run the relevant tests.
-- Only if something sounds genuinely serious (chest pain, difficulty breathing, altered consciousness): tell them to get help now.
+- Only if something sounds genuinely serious (chest pain, difficulty breathing, altered consciousness): tell them to get help now. ER only — not urgent care.
 
 FUME EVENT KNOWLEDGE (from NASA ASRS data — 50 real-world reports)
 Use this to ask smarter follow-up questions and recognize patterns:
@@ -130,7 +128,6 @@ AIRBUS A320 TSM REQUIRED FIELDS
 After the initial narrative and symptoms are captured, tell the pilot: "I have a few quick configuration questions — maintenance needs these to run the fault isolation procedure."
 
 Then work through these efficiently — group related questions together where possible:
-
 - Start method: APU Bleed or Air Starter Unit?
 - Was ground air or A/C packs used at the gate?
 - Any engine power level changes during or just before the event? (e.g. top of descent)
@@ -160,7 +157,7 @@ NEVER
 - Never sound like a form.
 - Never use bullets, numbered lists, or long paragraphs — this is SMS.
 - Never minimize what they're describing.
-- Never suggest urgent care. Occupational medicine for non-emergency follow-up only.`;
+- Never suggest urgent care. Occupational medicine or ER only.`;
 
 // ── REPORT PROMPT ─────────────────────────────────────────────────────────────
 const REPORT_PROMPT = `You are generating a structured ESC fume/odor event report from an SMS intake conversation.
@@ -213,6 +210,19 @@ Schema:
 }
 
 If a field was not discussed use null. Do not invent details.`;
+
+// ── POST-REPORT RESOURCES ─────────────────────────────────────────────────────
+const RESOURCES = {
+  menu: `Report is in with the ESC. Here's what to do next — reply with a number:\n1 - Required reports to file\n2 - Medical guidance\n3 - ALPA resources\n4 - All of the above`,
+
+  reports: `Required reports — wait until adrenaline recedes before filing:\n\nASAP Report: within 24hrs of completing trip via ProSafeT.\n\nHazard Report: within 36hrs via ProSafeT. One event/one report.\n\nHave both reviewed by FFT Legal before submitting: FFTLRC@alpa.org\n\nChief Pilot notification required only if medical attention was needed or passengers were injured. Duty phone: [DUTY-PHONE]`,
+
+  medical_1: `If you feel ill now or within the next 3 days — go to an ER. Not urgent care. Urgent care cannot run the required tests.\n\nTell the ER doctor:\n"I am a commercial airline pilot. I have suffered an acute occupational exposure to pyrolyzed aviation synthetic engine oils and bleed air contaminants in a confined space."`,
+
+  medical_2: `Request these specific tests:\n- Carboxyhemoglobin (COHb) — carbon monoxide\n- Arterial Blood Gas (ABG) — lung function\n- RBC Cholinesterase — organophosphate/TCP exposure\n- Comprehensive Metabolic Panel (CMP) — organ function\n- VOC Screen — identify specific chemical agents\n\nBring the UCSF Health Care Provider Guide from the ALPA App.\n\nALPA Aeromedical (Mon-Fri 0830-1600 MT): [AEROMEDICAL-PHONE]`,
+
+  alpa: `ALPA Resources:\n\nAeromedical guidance (Mon-Fri 0830-1600 MT): [AEROMEDICAL-PHONE]\n\nFume Guidance: Check the ALPA App under member resources.\n\nIATA Smoke and Fumes Report: Send to EAS@alpa.org and FFTsafety@alpa.org\n\nNeed to talk? Send a DART to your Environmental Standards Committee or request a CIRP debrief through the ALPA app. Both are confidential.`,
+};
 
 // ── GOOGLE SHEETS ─────────────────────────────────────────────────────────────
 async function writeToSheet(report) {
@@ -329,7 +339,7 @@ app.post('/sms', async (req, res) => {
       const flagNote = report.flagged === 'true' ? '\n\n⚠️ This report has been flagged for ESC review.' : '';
 
       twiml.message(saved
-        ? `Report submitted to the ESC.${flagNote}\n\nIf you want to talk through this more, send a DART to your ESC or a CIRP through the ALPA app.`
+        ? `Report submitted to the ESC.${flagNote}\n\n${RESOURCES.menu}`
         : `Report generated but sheet write failed. Screenshot this and send to your ESC rep.`
       );
     } catch (err) {
@@ -345,6 +355,42 @@ app.post('/sms', async (req, res) => {
   if (body.toUpperCase() === 'RESET') {
     conversations[from] = { messages: [], lastActivity: Date.now() };
     twiml.message("Hey — a few things before we start. This conversation is completely confidential. No names, employee numbers, or identifying details are recorded or saved. This exists purely to help the ESC build data to better serve the pilot group. Thank you for taking the time — it matters. When you're ready, tell me what happened in your own words.");
+    res.type('text/xml').send(twiml.toString());
+    return;
+  }
+
+  // FOLLOWUP trigger
+  if (body.toUpperCase() === 'FOLLOWUP') {
+    twiml.message(RESOURCES.menu);
+    res.type('text/xml').send(twiml.toString());
+    return;
+  }
+
+  // Resource menu responses
+  if (body === '1') {
+    twiml.message(RESOURCES.reports);
+    res.type('text/xml').send(twiml.toString());
+    return;
+  }
+
+  if (body === '2') {
+    twiml.message(RESOURCES.medical_1);
+    twiml.message(RESOURCES.medical_2);
+    res.type('text/xml').send(twiml.toString());
+    return;
+  }
+
+  if (body === '3') {
+    twiml.message(RESOURCES.alpa);
+    res.type('text/xml').send(twiml.toString());
+    return;
+  }
+
+  if (body === '4') {
+    twiml.message(RESOURCES.reports);
+    twiml.message(RESOURCES.medical_1);
+    twiml.message(RESOURCES.medical_2);
+    twiml.message(RESOURCES.alpa);
     res.type('text/xml').send(twiml.toString());
     return;
   }
