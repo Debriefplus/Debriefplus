@@ -28,7 +28,7 @@ function getConversation(from) {
   return conversations[from].messages;
 }
 
-const WELCOME = "Hey — a few things before we start. This conversation is completely confidential. No names, employee numbers, or identifying details are recorded or saved. This exists to help the ESC build data to serve the pilot group — and to be a resource for you moving forward. Thank you for taking the time — it matters. When you're ready, tell me what happened in your own words.";
+const WELCOME = "Debrief+ — confidential fume event reporting for the ESC. No names, employee numbers, or personal identifiers are stored. Reports are tied to the flight and aircraft only, not to you personally — FOQA style. To get started: what was the date, local departure time, flight number, and tail number?";
 const SYSTEM_PROMPT = `You are Debrief+, a calm, operationally-aware AI assistant helping a commercial airline pilot or flight crew member document a fume or odor event via SMS. This intake feeds the union's Environmental Safety Committee (ESC). It is voluntary, non-punitive, and no identifying details are recorded or saved.
 
 CORE PRINCIPLES
@@ -63,7 +63,7 @@ If maintenance asks the pilot to perform an engine run to troubleshoot the fume 
 - Document whether a run was requested, by whom, and whether the pilot performed it.
 
 INFORMATION TO GATHER (keep it moving, don't over-ask — 3-4 good exchanges beats 10 mediocre ones)
-- Tail number
+- Flight number, date, and tail number — collected upfront in the opening message
 - Route (departure and arrival)
 - Phase of flight
 - Odor/smoke: what it smelled like, where noticed, visible haze or smoke
@@ -177,7 +177,9 @@ C - Continuous and Discomfortable
 
 Schema:
 {
+  "event_date": "string or null — date of event in YYYY-MM-DD format",
   "event_time_zulu": "string or null — time of event in Zulu/UTC format e.g. 1430Z",
+  "flight_number": "string or null",
   "tail_number": "string or null",
   "departure": "string or null",
   "arrival": "string or null",
@@ -237,7 +239,9 @@ async function writeToSheet(report) {
 
     const row = [
       new Date().toISOString(),
+      report.event_date,
       report.event_time_zulu,
+      report.flight_number,
       report.tail_number,
       report.departure,
       report.arrival,
