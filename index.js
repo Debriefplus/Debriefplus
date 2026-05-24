@@ -15,21 +15,19 @@ const conversations = {};
 function getConversation(from) {
   const now = Date.now();
   const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
-
-  if (!conversations[from]) {
-    conversations[from] = { messages: [], lastActivity: now };
-  }
-
+  if (!conversations[from]) conversations[from] = { messages: [], lastActivity: now };
   if (now - conversations[from].lastActivity > TWENTY_FOUR_HOURS) {
     conversations[from] = { messages: [], lastActivity: now };
   }
-
   conversations[from].lastActivity = now;
   return conversations[from].messages;
 }
 
-const WELCOME = "Debrief+ — confidential fume event reporting for the ESC. No names, employee numbers, or personal identifiers are stored. Reports are tied to the flight and aircraft only, not to you personally — FOQA style. To get started: what was the date, local departure time, flight number, and tail number?";
-const SYSTEM_PROMPT = `You are Debrief+, a calm, operationally-aware AI assistant helping a commercial airline pilot or flight crew member document a fume or odor event via SMS. This intake feeds the union's Environmental Safety Committee (ESC). It is voluntary, non-punitive, and no identifying details are recorded or saved.
+// ── WELCOME MESSAGE ───────────────────────────────────────────────────────────
+const WELCOME = "Debrief+ — ESC fume event reporting. Think of this like your FOQA data. Flight and aircraft details are collected to help the ESC identify trends, follow up with maintenance, and protect the pilot group. No names or personal identifiers — ever. Nothing here can be used against you or your medical certificate. To get started: date, flight number, and tail number?";
+
+// ── SYSTEM PROMPT ─────────────────────────────────────────────────────────────
+const SYSTEM_PROMPT = `You are Debrief+, a calm, operationally-aware AI assistant helping a commercial airline pilot or flight crew member document a fume or odor event via SMS. This intake feeds the union's Environmental Safety Committee (ESC). It is voluntary, non-punitive, and no personal identifying details are recorded or saved.
 
 CORE PRINCIPLES
 - Human first, data collector second.
@@ -43,7 +41,7 @@ TONE
 
 REPORT QUALITY AND INTEGRITY
 - If a message is clearly not a safety report — gibberish, joke, test, or explicit trolling — respond once, calmly: "Debrief+ is a confidential safety reporting tool for flight crews. If you have an incident to report, I'm here. Otherwise I can't help with this." Do not engage further.
-- If a conversation seems implausible, inconsistent, or deliberately evasive — still complete the intake and generate the report, but set "flagged" to true in the report and include a brief "flag_reason" note. The ESC will review. Don't accuse the pilot — just document your concern quietly in the report.
+- If a conversation seems implausible, inconsistent, or deliberately evasive — still complete the intake and generate the report, but set "flagged" to true and include a brief "flag_reason" note. Don't accuse the pilot — document your concern quietly.
 - Signs that may warrant flagging: no aircraft details after repeated prompting, implausible symptom combinations, contradictory timeline, explicit acknowledgment it's a test or joke, extreme vagueness despite multiple follow-up attempts.
 - A report that is simply incomplete or missing details is NOT a flag — that's normal. Only flag if something actively seems wrong.
 
@@ -68,6 +66,7 @@ INFORMATION TO GATHER (keep it moving, don't over-ask — 3-4 good exchanges bea
 - Phase of flight
 - Odor/smoke: what it smelled like, where noticed, visible haze or smoke
 - Symptoms — theirs and crew — at the time AND right now
+- How many crew members were affected total (flight deck + flight attendants)
 - Operational impact (masks, emergency, diversion, gate return)
 - Time of event — ask "What time did you notice it, local time?" then ask what timezone, convert to Zulu (UTC), and confirm with the pilot before moving on.
 - Maintenance write-up: if they've written it or plan to, encourage them to be as descriptive as possible — specific smells, locations, durations, who noticed it. A detailed write-up forces maintenance to do more thorough troubleshooting.
@@ -147,70 +146,6 @@ CORROBORATING DATA
 - Ask whether maintenance was notified and whether a write-up was logged in the AML.
 - Frame these as "help me get the full picture" — never as doubting the pilot.
 
-SEVERITY ASSESSMENT (AQP-style 1–4)
-As you gather information, maintain a running assessment of severity. Use the criteria below. Severity can only move UP — never down — as new information emerges. The final severity and justification will be written into the report.
-
-LEVEL 1 — Subclinical
-Odor detected. No symptoms in any crew member. No operational impact. QRH run preventively or not at all. Maintenance signal only.
-
-LEVEL 2 — Mild, resolved
-Symptoms were present during the event (eye/nose/throat irritation, transient headache, brief nausea, mild cough, brief lightheadedness) but are fully resolved by the time of this report. No oxygen use. No diversion. No medical attention sought. Pilot feels fit to fly next leg.
-
-LEVEL 3 — Moderate / persistent
-Any of the following: any symptom still present at time of report; any moderate-severity symptom during the event (brain fog, difficulty concentrating, paresthesias/tingling/numbness, dyspnea or chest tightness, tremor, vision changes, palpitations, persistent or worsening headache, vomiting, dizziness with balance disturbance); diversion considered but not executed; medical attention sought or planned; pilot unsure about fitness for next leg; multiple crew affected.
-
-LEVEL 4 — Severe / sentinel
-Any of the following: oxygen used in flight by any crew member; crew incapacitation (any duration); diversion executed or emergency declared; loss of consciousness or near-syncope; sustained chest pain or severe respiratory distress; sustained confusion or disorientation; crew member unable to perform duties; multiple symptomatic crew across categories (pilots AND flight attendants); pilot states they are not fit to fly next leg; symptoms worsening rather than resolving in the hours after the event.
-
-SEVERITY UPGRADE RULE
-If the pilot reports worsening at any point — including the longitudinal check-in messages — the severity must be upgraded to reflect the new information. Log the reason for any upgrade in the justification field.
-
-SYMPTOM INTELLIGENCE
-Use the symptom catalogue below to ask smarter follow-up questions and recognize clinically significant patterns. A single mild symptom (runny nose, brief headache) is common and non-specific. A cluster of symptoms across organ systems is a different picture entirely.
-
-MILD / NON-SPECIFIC (probe gently, document accurately):
-- Eye irritation, tearing, burning
-- Nose and sinus irritation, runny nose
-- Mild throat irritation or sore throat
-- Mild headache (transient)
-- Brief lightheadedness
-- Mild nausea without vomiting
-- Mild cough
-- Skin or mucous membrane irritation
-
-MODERATE (warrant follow-up, flag if persisting):
-- Persistent or worsening headache
-- Dizziness with balance disturbance
-- Vomiting
-- Dyspnea or chest tightness during event
-- Tremor or shakiness
-- Paresthesias — tingling, numbness, especially distal or perioral
-- Brain fog, difficulty concentrating, slowed thinking
-- Diarrhea, abdominal cramps, excessive saliva (muscarinic pattern — organophosphate signal)
-- Palpitations
-- Significant fatigue
-- Vision changes — blurred, difficulty focusing
-
-SEVERE (immediate flag, Level 4 automatic):
-- Loss of consciousness or near-syncope
-- Sustained confusion or disorientation
-- Crew member unable to perform duties
-- Supplemental or emergency oxygen used during event
-- Sustained chest pain
-- Severe respiratory distress
-- Nystagmus, marked tremor, impaired speech, gait disturbance
-- Seizure or seizure-like activity
-
-PATTERN RECOGNITION — if a pilot reports symptoms across multiple organ systems (e.g., headache + paresthesias + brain fog, or nausea + chest tightness + vision changes), treat this as a higher-severity cluster regardless of how mild each individual symptom sounds. Document each symptom explicitly.
-
-SUBACUTE SYMPTOMS — ask about these if the event was more than a few hours ago:
-- Chemical sensitivity (new intolerance to odors, fuel smells, cleaning products)
-- Sleep disturbance
-- Persistent cognitive symptoms — memory, word-finding, concentration
-- Exercise intolerance
-- Persistent cough or reactive airway symptoms
-- Mood changes — anxiety, low mood
-
 FLOW
 1. Keep messages short — this is SMS.
 2. Don't ask things they've already told you.
@@ -228,15 +163,11 @@ const REPORT_PROMPT = `You are generating a structured ESC fume/odor event repor
 
 Output ONLY valid JSON. No prose, no markdown fences.
 
-SEVERITY RUBRIC (AQP-style 1–4):
-1 - Subclinical: Odor detected, no symptoms in any crew, no operational impact. QRH preventive or not run. Maintenance signal only.
-2 - Mild, resolved: Symptoms present during event (eye/nose/throat irritation, transient headache, brief nausea) but fully resolved by time of report. No oxygen use, no diversion, no medical attention sought. Pilot fit to fly.
-3 - Moderate / persistent: Any symptom still present at time of report. OR any moderate-severity symptom during event (brain fog, paresthesias, dyspnea, tremor, vision changes, vomiting, balance disturbance, palpitations). OR diversion considered, medical attention sought, pilot unsure about fitness for next leg, multiple crew affected.
-4 - Severe / sentinel: Any of — oxygen used in flight, crew incapacitation, diversion executed, emergency declared, loss of consciousness, sustained chest pain, severe respiratory distress, sustained confusion, crew unable to perform duties, multiple crew across categories (pilots AND FAs), pilot not fit to fly next leg, symptoms worsening post-event.
-
-SEVERITY UPGRADE RULE: Severity can only move UP. If longitudinal follow-up data indicates worsening, upgrade accordingly and document in severity_justification.
-
-SEVERITY JUSTIFICATION: Write a concise 1-2 sentence explanation citing the specific symptoms, operational factors, or timeline data that drove the severity assignment. Be specific — name the symptoms and the criteria they meet. This is the audit trail for the ESC to review the bot's reasoning.
+Severity 1-4 (AQP-style, weight toward middle):
+1 - Non-event: odor noticed, no symptoms, no operational impact.
+2 - Possible fume event: recognizable odor, mild symptoms, no operational impact.
+3 - Confirmed fume event: clear odor, moderate symptoms, possible operational impact. Most real events.
+4 - Serious fume event: neurological symptoms, emergency declared, diversion, multiple crew/pax affected.
 
 Odor level (Airbus standard):
 A - Temporary
@@ -256,11 +187,11 @@ Schema:
   "odor_description": "string or null",
   "crew_symptoms_at_event": "string or null",
   "crew_symptoms_current": "string or null",
+  "crew_affected_count": "number or null",
   "operational_impact": "string or null",
   "maintenance_log_status": "string or null",
   "others_affected": "string or null",
   "severity_rating": "1 / 2 / 3 / 4",
-  "severity_justification": "string — concise explanation of what drove this severity score, citing specific symptoms and criteria",
   "start_method": "APU Bleed / Air Starter Unit / unknown",
   "ground_air_or_packs_at_gate": "Ground Air / A/C Packs / Neither / unknown",
   "engine_pwr_level_changes": "yes / no / unknown",
@@ -276,8 +207,8 @@ Schema:
   "odor_level": "A / B / C / unknown",
   "narrative": "1 paragraph, third person past tense",
   "additional_notes": "string or null",
-  "flagged": "true / false",
-  "flag_reason": "string or null"
+  "flagged": "true ONLY if: conversation was clearly a joke/test, pilot explicitly said it was fake, timeline was internally contradictory, or no aircraft details were provided despite repeated asking. High severity events are NOT a reason to flag. Most reports should be false.",
+  "flag_reason": "string or null — only populate if flagged is true"
 }
 
 If a field was not discussed use null. Do not invent details.`;
@@ -319,11 +250,11 @@ async function writeToSheet(report) {
       report.odor_description,
       report.crew_symptoms_at_event,
       report.crew_symptoms_current,
+      report.crew_affected_count || null,
       report.operational_impact,
       report.maintenance_log_status,
       report.others_affected,
       report.severity_rating ? parseInt(report.severity_rating) : null,
-      report.severity_justification || '',
       report.start_method,
       report.ground_air_or_packs_at_gate,
       report.engine_pwr_level_changes,
@@ -364,9 +295,9 @@ app.post('/sms', async (req, res) => {
   const from = req.body.From;
   const body = (req.body.Body || '').trim();
   const history = getConversation(from);
+  const bodyUpper = body.toUpperCase();
 
   // FOLLOWUP trigger — always works regardless of conversation state
-  const bodyUpper = body.toUpperCase();
   if (bodyUpper === 'FOLLOWUP' || bodyUpper === 'FOLLOW UP' || bodyUpper === 'FOLLOW-UP') {
     twiml.message(RESOURCES.menu);
     res.type('text/xml').send(twiml.toString());
@@ -399,7 +330,8 @@ app.post('/sms', async (req, res) => {
     return;
   }
 
-  if (body.toUpperCase() === 'REPORT') {
+  // REPORT trigger
+  if (bodyUpper === 'REPORT') {
     const userMessages = history.filter(m => m.role === 'user');
     if (userMessages.length < 3) {
       twiml.message("I want to make sure I have enough to build a solid report. Can you tell me a bit more — tail number, route, and what the odor was like?");
@@ -440,30 +372,24 @@ app.post('/sms', async (req, res) => {
       const cleaned = text.replace(/```json|```/g, '').trim();
       const report = JSON.parse(cleaned);
       const saved = await writeToSheet(report);
-
       if (saved) conversations[from] = { messages: [], lastActivity: Date.now() };
 
       const flagNote = report.flagged === 'true' ? '\n\n⚠️ This report has been flagged for ESC review.' : '';
+      const saveNote = saved ? 'Report submitted to the ESC.' : 'Report generated but sheet write failed — screenshot this and send to your ESC rep.';
 
-      const closingMessage = `Thanks for filing. If you need support, you can send a DART to ESC or contact CIRP anytime. Your ESC is also building a long-term health dataset — if you're willing to help, it takes about 5 minutes and is completely anonymous: [LONGTERM-FORM-LINK]`;
-
-      twiml.message(saved
-        ? `Report submitted to the ESC.${flagNote}\n\n${RESOURCES.menu}`
-        : `Report generated but sheet write failed. Screenshot this and send to your ESC rep.`
-      );
-
-      if (saved) {
-        twiml.message(closingMessage);
-      }
+      twiml.message(`${saveNote}${flagNote}`);
+      twiml.message(RESOURCES.menu);
 
     } catch (err) {
       console.error('Report error:', err);
       twiml.message("Something went wrong generating the report. Reply REPORT to try again.");
+      twiml.message(RESOURCES.menu);
     }
 
-    // Guaranteed response — if twiml has no messages yet something went very wrong
+    // Guaranteed fallback
     if (!twiml.toString().includes('<Message>')) {
-      twiml.message("Report received. Something went wrong on our end — please reply REPORT to try again or text FOLLOWUP for resources.");
+      twiml.message("Report received. Something went wrong — reply REPORT to try again.");
+      twiml.message(RESOURCES.menu);
     }
 
     res.type('text/xml').send(twiml.toString());
@@ -471,9 +397,9 @@ app.post('/sms', async (req, res) => {
   }
 
   // RESET trigger
-  if (body.toUpperCase() === 'RESET') {
+  if (bodyUpper === 'RESET') {
     conversations[from] = { messages: [], lastActivity: Date.now() };
-    twiml.message("Hey — a few things before we start. This conversation is completely confidential. No names, employee numbers, or identifying details are recorded or saved. This exists to help the ESC build data to serve the pilot group — and to be a resource for you moving forward. Thank you for taking the time — it matters. When you're ready, tell me what happened in your own words.");
+    twiml.message(WELCOME);
     res.type('text/xml').send(twiml.toString());
     return;
   }
@@ -483,9 +409,8 @@ app.post('/sms', async (req, res) => {
   const isFirst = history.length === 1;
 
   if (isFirst) {
-    const welcomeReply = "Hey — a few things before we start. This conversation is completely confidential. No names, employee numbers, or identifying details are recorded or saved. This exists purely to help the ESC build data to better serve the pilot group. Thank you for taking the time — it matters. When you're ready, tell me what happened in your own words.";
-    history.push({ role: 'assistant', content: welcomeReply });
-    twiml.message(welcomeReply);
+    history.push({ role: 'assistant', content: WELCOME });
+    twiml.message(WELCOME);
     res.type('text/xml').send(twiml.toString());
     return;
   }
@@ -493,9 +418,8 @@ app.post('/sms', async (req, res) => {
   // Also fire welcome if no assistant response yet
   const hasAssistantResponse = history.some(m => m.role === 'assistant');
   if (!hasAssistantResponse) {
-    const welcomeReply = "Hey — a few things before we start. This conversation is completely confidential. No names, employee numbers, or identifying details are recorded or saved. This exists purely to help the ESC build data to better serve the pilot group. Thank you for taking the time — it matters. When you're ready, tell me what happened in your own words.";
-    history.push({ role: 'assistant', content: welcomeReply });
-    twiml.message(welcomeReply);
+    history.push({ role: 'assistant', content: WELCOME });
+    twiml.message(WELCOME);
     res.type('text/xml').send(twiml.toString());
     return;
   }
